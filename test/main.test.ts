@@ -1,13 +1,19 @@
-import { ViewRender } from "index";
+import { ObjectTransformer, ObjectTransformerHelperIndex, ObjectTransformerSettingIndex } from "index";
 
-const views = {
+const transformers: ObjectTransformerSettingIndex = {
 
 }
 
-declare('ViewRender', () => {
-  let renderTest: ViewRender;
+const helpers: ObjectTransformerHelperIndex = {
+
+}
+
+declare('ObjectTransfromer', () => {
+  let renderTest: ObjectTransformer;
 
   beforeAll(() => {
-    renderTest = new ViewRender();
-  })
+    renderTest = new ObjectTransformer(transformers, helpers);
+  });
+
+
 })

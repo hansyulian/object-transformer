@@ -1,16 +1,17 @@
-export type ViewContext<T> = T;
-export type KeyValuePair<T = unknown> = Record<string, T>;
-export type ViewSettings = KeyValuePair<ViewOptions>;
-export type ViewProcessType<Value = unknown, Data = unknown, Context = {}> = (
+export type KeyValuePair<T = unknown> = { [key: string]: T };
+export type ObjectTransformerSetting = KeyValuePair<ObjectTransformerOptions>;
+export type ObjectProcessor<Value = unknown, Data = unknown, Context = {}> = (
   value: Value,
   data: Data,
-  settings: ViewOptions,
-  context: ViewContext<Context>,
+  settings: ObjectTransformerOptions,
+  context: Context,
 ) => Data;
-export type ViewOptions = {
+export type ObjectTransformerOptions = {
   from?: string;
-  process?: ViewProcessType<string | number | unknown, string | number | unknown>;
-  view?: string;
+  process?: ObjectProcessor<string | number | unknown, string | number | unknown>;
+  transformerName?: string;
   defaultValue?: unknown;
   enums?: unknown;
 }
+export type ObjectTransformerSettingIndex = KeyValuePair<ObjectTransformerOptions>;
+export type ObjectTransformerHelperIndex = KeyValuePair<ObjectProcessor>;

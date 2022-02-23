@@ -1,3 +1,2 @@
 export * from './customTypes';
-export * from './viewRender';
-export * from './utils';
+export * from './ObjectTransformer';
