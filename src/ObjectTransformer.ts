@@ -1,26 +1,51 @@
 import { extract } from 'utils';
-import { ObjectProcessor, ObjectTransformerOptions, KeyValuePair, ObjectTransformerSettingIndex, ObjectTransformerHelperIndex } from './customTypes';
+import { ObjectTransformerOptions, KeyValuePair, ObjectTransformerSettingIndex, ObjectTransformerHelperIndex, ObjectTransformerErrorType, ObjectTransformerBaseContext, TransformReturnType, ObjectTransformerError } from './customTypes';
 
-export class ObjectTransformer<ObjectTransformers extends ObjectTransformerSettingIndex = {},
-  ObjectTransformerHelpers extends ObjectTransformerHelperIndex = {},
-  Keys extends keyof ObjectTransformers = ''>{
+export class ObjectTransformer<TransformerIndex extends ObjectTransformerSettingIndex,
+  TransformerHelperIndex extends ObjectTransformerHelperIndex>{
+  private _transformerIndex: TransformerIndex;
+  private _transformerHelperIndex: TransformerHelperIndex;
 
-  public viewIndex: ObjectTransformers;
-  public viewHelperIndex: ObjectTransformerHelpers;
+  constructor(transformerIndex: TransformerIndex,
+    transformerHelperIndex: TransformerHelperIndex,
+  ) {
+    this._transformerIndex = transformerIndex;
+    this._transformerHelperIndex = transformerHelperIndex;
 
-  constructor(viewIndex: ObjectTransformers, viewHelperIndex: ObjectTransformerHelpers) {
-    this.viewIndex = viewIndex;
-    this.viewHelperIndex = viewHelperIndex;
   }
 
-  public render<Data, DataContext>(name: Keys, data: Data | Data[], context?: DataContext): (KeyValuePair | KeyValuePair[]) {
+  public get transformerIndex() {
+    return this._transformerIndex
+  }
+
+  public get transformerHelperIndex() {
+    return this._transformerHelperIndex;
+  }
+
+  public process<Data, CustomObjectTransformerContext>(name: string, data: Data | Data[], additionalContext?: CustomObjectTransformerContext): TransformReturnType {
+    const runContext = {
+      ...additionalContext,
+      errors: [],
+      iterationKeys: [],
+    }
+    const result = this._process(name, data, runContext);
+    if (runContext.errors.length > 0) {
+      throw new ObjectTransformerError(runContext.errors);
+    }
+    return result;
+  }
+
+  private _process<Data, CustomObjectTransformerContext>(name: string, data: Data | Data[], context: CustomObjectTransformerContext & ObjectTransformerBaseContext): (KeyValuePair | KeyValuePair[]) {
     if (Array.isArray(data)) {
-      return data.map((record) => this.render(name, record, context)) as KeyValuePair[];
+      return data.map((record, index) => this._process(name, record, {
+        ...context,
+        iterationKeys: [...context.iterationKeys, index],
+      })) as KeyValuePair[];
     }
     if (data === null || data === undefined) {
       return {};
     }
-    const view: ObjectTransformerOptions = this.viewIndex[name];
+    const view: ObjectTransformerOptions = this._transformerIndex[name];
     if (!view) {
       throw new Error(`View not found: ${name}`);
     }
@@ -28,17 +53,48 @@ export class ObjectTransformer<ObjectTransformers extends ObjectTransformerSetti
     const fieldSettings: [string, ObjectTransformerOptions][] = Object.entries(view);
     for (const fieldSetting of fieldSettings) {
       const [key, options] = fieldSetting;
-      const { defaultValue, enums, from, process, transformerName } = options;
+      const { defaultValue, required, type, enums, from, process, transformerName } = options;
+      const iterationKeys = [...context.iterationKeys, key];
       let value = from ? extract(data, from) : data[key];
-      value = value === undefined ? defaultValue : value;
+      // validation
+      if (required && (value === undefined || value === null)) {
+        context.errors.push({
+          type: 'required',
+          iterationKeys,
+        });
+        continue;
+      }
+      if (value === undefined || value === null) {
+        continue;
+      }
+      if (type) {
+        const valueType = typeof (value);
+        if (type !== valueType) {
+          context.errors.push({
+            type: 'invalidType',
+            iterationKeys,
+            expectation: type,
+            reality: valueType,
+          })
+          continue;
+        }
+      }
+      // value processing
+      value = value === undefined || value === null ? defaultValue : value;
       if (enums) {
         value = enums[value];
       }
       if (process) {
-        value = process(value, data, options, context);
+        value = process(value, data, options, {
+          ...context,
+          iterationKeys,
+        });
       }
       if (transformerName) {
-        value = this.render(transformerName as Keys, value, context);
+        value = this._process(transformerName, value, {
+          ...context,
+          iterationKeys,
+        });
       }
       result[key] = value;
     }
